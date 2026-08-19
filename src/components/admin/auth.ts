@@ -1,21 +1,15 @@
-/** Lightweight client auth gate for the admin UI (temporary). */
+/**
+ * Client-side session helpers.
+ *
+ * Access control lives in middleware + the /api/cms proxy, both of which
+ * validate the httpOnly session cookie. The browser cannot read that cookie,
+ * so there is nothing to check here — only a way to end the session.
+ */
 
-const KEY = 'vanguard-admin-auth';
-
-export function isAdminAuthed(): boolean {
-  if (typeof window === 'undefined') return false;
+export async function adminLogout(): Promise<void> {
   try {
-    return window.localStorage.getItem(KEY) === '1';
+    await fetch('/api/auth/logout', { method: 'POST' });
   } catch {
-    return false;
-  }
-}
-
-export function setAdminAuthed(value: boolean) {
-  try {
-    if (value) window.localStorage.setItem(KEY, '1');
-    else window.localStorage.removeItem(KEY);
-  } catch {
-    /* ignore */
+    /* clearing the cookie server-side is best effort */
   }
 }

@@ -2,10 +2,10 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useEffect, useState, type ReactNode } from 'react';
 
-import { isAdminAuthed, setAdminAuthed } from '@/components/admin/auth';
+import { adminLogout } from '@/components/admin/auth';
 import {
   IconBlogs,
   IconDashboard,
@@ -60,34 +60,19 @@ function crumbFor(pathname: string) {
 
 export function AdminShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const [ready, setReady] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  useEffect(() => {
-    if (!isAdminAuthed()) {
-      router.replace('/admin/login');
-      return;
-    }
-    setReady(true);
-  }, [router, pathname]);
 
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
 
-  if (!ready) {
-    return (
-      <div data-admin className="admin-login">
-        <div className="admin-skeleton" style={{ width: 280, height: 120 }} />
-      </div>
-    );
-  }
-
-  const logout = () => {
-    setAdminAuthed(false);
-    router.replace('/admin/login');
+  // No client-side auth gate: middleware already blocked unauthenticated
+  // requests before this rendered, so there is no flash-of-skeleton here.
+  const logout = async () => {
+    await adminLogout();
+    // Full navigation so middleware sees the cleared cookie.
+    window.location.href = '/admin/login';
   };
 
   return (

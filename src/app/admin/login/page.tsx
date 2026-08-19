@@ -1,40 +1,46 @@
 'use client';
 
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
-import { isAdminAuthed, setAdminAuthed } from '@/components/admin/auth';
 import { Button, Field, Input } from '@/components/admin/ui';
 import { SITE } from '@/lib/constants';
 
 export default function AdminLoginPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState('admin@vanguard.studio');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [show, setShow] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (isAdminAuthed()) router.replace('/admin');
-  }, [router]);
-
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError('');
     setLoading(true);
-    await new Promise((r) => setTimeout(r, 500));
 
-    // Temporary local gate — wire to Django session/JWT later.
-    if (email.trim() && password.trim().length >= 4) {
-      setAdminAuthed(true);
-      router.replace('/admin');
-      return;
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as {
+          detail?: string;
+        };
+        setError(data.detail ?? 'Invalid username or password.');
+        setLoading(false);
+        return;
+      }
+
+      // Full navigation so middleware re-reads the new session cookie.
+      const next = new URLSearchParams(window.location.search).get('next');
+      window.location.href = next?.startsWith('/') ? next : '/admin';
+    } catch {
+      setError('Could not reach the server. Try again.');
+      setLoading(false);
     }
-
-    setLoading(false);
-    setError('Enter a valid email and password (min 4 characters).');
   };
 
   return (
@@ -51,12 +57,13 @@ export default function AdminLoginPage() {
         </p>
 
         <form onSubmit={submit} className="admin-stack" style={{ marginTop: 28 }}>
-          <Field label="Email" error={error && !email ? error : undefined}>
+          <Field label="Username">
             <Input
-              type="email"
+              type="text"
               autoComplete="username"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              invalid={Boolean(error)}
               required
             />
           </Field>

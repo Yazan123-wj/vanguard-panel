@@ -1,49 +1,44 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+import { SESSION_COOKIE, readSessionToken } from '@/lib/session';
+
 /**
- * HTTP Basic Auth gate for the whole panel.
+ * Route guard for the panel.
  *
- * The in-app /admin/login screen is a client-side placeholder (it accepts any
- * email with a 4+ char password), so it is not a real access control. This
- * middleware is the actual barrier in front of the panel on its public domain.
- * Set PANEL_USER / PANEL_PASSWORD to enable it.
+ * Unauthenticated visitors are redirected to the panel's own /admin/login
+ * screen — no browser Basic Auth dialog. Real credential checking happens in
+ * /api/auth/login against Django; this only validates the signed cookie.
  */
-export function middleware(request: NextRequest) {
-  const user = process.env.PANEL_USER;
-  const password = process.env.PANEL_PASSWORD;
+export async function middleware(request: NextRequest) {
+  const { pathname, search } = request.nextUrl;
 
-  // No credentials configured — fail closed rather than exposing the panel.
-  if (!user || !password) {
-    return new NextResponse('Panel access is not configured.', { status: 503 });
+  // The login screen and the auth endpoints must stay reachable.
+  if (pathname === '/admin/login' || pathname.startsWith('/api/auth/')) {
+    return NextResponse.next();
   }
 
-  const header = request.headers.get('authorization');
+  const secret = process.env.SESSION_SECRET ?? '';
+  const username = await readSessionToken(
+    request.cookies.get(SESSION_COOKIE)?.value,
+    secret,
+  );
 
-  if (header?.startsWith('Basic ')) {
-    let decoded = '';
-    try {
-      decoded = atob(header.slice(6));
-    } catch {
-      decoded = '';
-    }
-    const separator = decoded.indexOf(':');
-    if (separator !== -1) {
-      const suppliedUser = decoded.slice(0, separator);
-      const suppliedPassword = decoded.slice(separator + 1);
-      if (suppliedUser === user && suppliedPassword === password) {
-        return NextResponse.next();
-      }
-    }
+  if (username) return NextResponse.next();
+
+  // API calls get a status they can handle; page loads get sent to the login.
+  if (pathname.startsWith('/api/')) {
+    return NextResponse.json({ detail: 'Unauthorized' }, { status: 401 });
   }
 
-  return new NextResponse('Authentication required.', {
-    status: 401,
-    headers: { 'WWW-Authenticate': 'Basic realm="Vanguard Panel", charset="UTF-8"' },
-  });
+  const loginUrl = new URL('/admin/login', request.url);
+  if (pathname !== '/' && pathname !== '/admin') {
+    loginUrl.searchParams.set('next', `${pathname}${search}`);
+  }
+  return NextResponse.redirect(loginUrl);
 }
 
 export const config = {
-  // Guard every route, including the login screen and static chunks.
-  matcher: ['/((?!_next/static/media).*)'],
+  // Guard pages and the CMS proxy; skip Next's static assets and the favicon.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };

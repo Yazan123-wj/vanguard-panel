@@ -39,6 +39,8 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Guard pages and the CMS proxy; skip Next's static assets and the favicon.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  // Match only the protected surface. A broad negative-lookahead pattern also
+  // caught /brand/* and the image optimizer, which broke the logo on the
+  // (unauthenticated) login page.
+  matcher: ['/', '/admin/:path*', '/api/cms/:path*'],
 };

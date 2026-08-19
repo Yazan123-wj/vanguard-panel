@@ -111,17 +111,13 @@ export type AdminDashboardData = {
   }[];
 };
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ??
-  process.env.API_URL ??
-  'http://127.0.0.1:8001';
-
-const ADMIN_TOKEN =
-  process.env.NEXT_PUBLIC_ADMIN_API_TOKEN ?? 'vanguard-admin-dev';
+// Same-origin proxy. The Django API token lives on the panel's server only —
+// it is deliberately not a NEXT_PUBLIC_* value, so it never reaches the
+// browser. The session cookie rides along automatically on same-origin calls.
+const API_URL = '/api/cms';
 
 async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
-  headers.set('X-Admin-Token', ADMIN_TOKEN);
   if (init?.body && !(init.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
@@ -131,6 +127,11 @@ async function adminFetch<T>(path: string, init?: RequestInit): Promise<T> {
     headers,
     cache: 'no-store',
   });
+
+  if (response.status === 401 && typeof window !== 'undefined') {
+    window.location.href = '/admin/login';
+    throw new Error('Session expired. Please sign in again.');
+  }
 
   if (!response.ok) {
     let detail = `Request failed (${response.status})`;
